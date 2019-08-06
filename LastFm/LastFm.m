@@ -9,11 +9,25 @@
 #import "LastFm.h"
 #import "DDXML.h"
 #include <CommonCrypto/CommonDigest.h>
+#import <AFNetworking/AFNetworking.h>
 
-#define API_URL @"https://ws.audioscrobbler.com/2.0/"
+
+
+#define API_URL @"http://ws.audioscrobbler.com/2.0/"
+
+
+@interface DDXMLParserResponseSerializer : AFHTTPResponseSerializer
+
+@end
+
+
+
+
 
 @interface DDXMLNode (objectAtXPath)
+
 - (id)objectAtXPath:(NSString *)XPath;
+
 @end
 
 @implementation DDXMLNode (objectAtXPath)
@@ -46,91 +60,110 @@
 
 
 @interface LastFm ()
-@property (nonatomic, strong) NSOperationQueue *queue;
+
+@property (nonatomic,strong)AFHTTPSessionManager *sessionManager;
+
 @end
 
 
 @implementation LastFm
 
 + (LastFm *)sharedInstance {
+#ifdef APP_LAST_FM
     static dispatch_once_t pred;
     static LastFm *sharedInstance = nil;
-    dispatch_once(&pred, ^{ sharedInstance = [[self alloc] init]; });
+    dispatch_once(&pred, ^{
+        sharedInstance = [[self alloc] init];
+        //http://www.last.fm/api/accounts
+        //https://www.last.fm/api/account/create
+        sharedInstance.apiKey = APP_LAST_FM_API_KEY;
+        sharedInstance.apiSecret = APP_LAST_FM_API_SECRET;
+        sharedInstance.timeoutInterval = 30.0;
+    });
     return sharedInstance;
+#endif
+    return nil;
 }
 
-- (id)init {
+- (instancetype)init {
     self = [super init];
     if (self) {
         self.apiKey = @"";
         self.apiSecret = @"";
-        self.queue = [[NSOperationQueue alloc] init];
-        self.maxConcurrentOperationCount = 4;
-        self.timeoutInterval = 10;
+        self.timeoutInterval = 30.0;
+        self.sessionManager = [[self class] sharedSessionManager];
     }
     return self;
 }
 
-- (void)setMaxConcurrentOperationCount:(NSInteger)maxConcurrentOperationCount {
-    _maxConcurrentOperationCount = maxConcurrentOperationCount;
-    self.queue.maxConcurrentOperationCount = _maxConcurrentOperationCount;
++ (AFHTTPSessionManager *)sharedSessionManager{
+    static dispatch_once_t onceToken;
+    static AFHTTPSessionManager *manager;
+    dispatch_once(&onceToken, ^{
+        NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        configuration.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+        configuration.allowsCellularAccess = YES;
+        configuration.timeoutIntervalForRequest = 30;
+        configuration.HTTPMaximumConnectionsPerHost = 1;
+        manager = [[AFHTTPSessionManager alloc] initWithSessionConfiguration:configuration];
+        dispatch_queue_t callBackQueue = dispatch_queue_create([@"com.lastfm.callback.queue" cStringUsingEncoding:NSUTF8StringEncoding], NULL);
+        manager.completionQueue = callBackQueue;
+        manager.responseSerializer = [DDXMLParserResponseSerializer serializer];
+        manager.requestSerializer.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    });
+    return manager;
 }
 
 + (NSDateFormatter *)dateFormatter {
-    NSMutableDictionary *dictionary = [[NSThread currentThread] threadDictionary];
-    NSDateFormatter *formatter = [dictionary objectForKey:@"LFMDateFormatter"];
-    if (!formatter) {
+    static dispatch_once_t onceToken;
+    static NSDateFormatter *formatter;
+    dispatch_once(&onceToken, ^{
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"EEE, dd MMM yyyy HH:mm:ss"];
-        [dictionary setObject:formatter forKey:@"LFMDateFormatter"];
-    }
+    });
     return formatter;
 }
 
 + (NSDateFormatter *)alternativeDateFormatter1 {
-    NSMutableDictionary *dictionary = [[NSThread currentThread] threadDictionary];
-    NSDateFormatter *formatter = [dictionary objectForKey:@"LFMDateFormatterAlt1"];
-    if (!formatter) {
+    static dispatch_once_t onceToken;
+    static NSDateFormatter *formatter;
+    dispatch_once(&onceToken, ^{
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"dd MMM yyyy, HH:mm"];
-        [dictionary setObject:formatter forKey:@"LFMDateFormatterAlt1"];
-    }
+    });
     return formatter;
 }
 
 + (NSDateFormatter *)alternativeDateFormatter2 {
-    NSMutableDictionary *dictionary = [[NSThread currentThread] threadDictionary];
-    NSDateFormatter *formatter = [dictionary objectForKey:@"LFMDateFormatterAlt2"];
-    if (!formatter) {
+    static dispatch_once_t onceToken;
+    static NSDateFormatter *formatter;
+    dispatch_once(&onceToken, ^{
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"EEE, dd MMM yyyy HH:mm:ss Z"];
-        [dictionary setObject:formatter forKey:@"LFMDateFormatterAlt2"];
-    }
+    });
     return formatter;
 }
 
 + (NSDateFormatter *)alternativeDateFormatter3 {
-    NSMutableDictionary *dictionary = [[NSThread currentThread] threadDictionary];
-    NSDateFormatter *formatter = [dictionary objectForKey:@"LFMDateFormatterAlt3"];
-    if (!formatter) {
+    static dispatch_once_t onceToken;
+    static NSDateFormatter *formatter;
+    dispatch_once(&onceToken, ^{
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"yyyy-MM-dd HH:mm"];
-        [dictionary setObject:formatter forKey:@"LFMDateFormatterAlt3"];
-    }
+    });
     return formatter;
 }
 
 + (NSNumberFormatter *)numberFormatter {
-    NSMutableDictionary *dictionary = [[NSThread currentThread] threadDictionary];
-    NSNumberFormatter *formatter = [dictionary objectForKey:@"LFMNumberFormatter"];
-    if (!formatter) {
+    static dispatch_once_t onceToken;
+    static NSNumberFormatter *formatter;
+    dispatch_once(&onceToken, ^{
         formatter = [[NSNumberFormatter alloc] init];
-        [dictionary setObject:formatter forKey:@"LFMNumberFormatter"];
-    }
+    });
     return formatter;
 }
 
@@ -237,8 +270,7 @@
     }
 }
 
-- (NSOperation *)performApiCallForMethod:(NSString*)method
-                                useCache:(BOOL)useCache
+- (NSURLSessionDataTask *)performApiCallForMethod:(NSString*)method
                               withParams:(NSDictionary *)params
                                rootXpath:(NSString *)rootXpath
                         returnDictionary:(BOOL)returnDictionary
@@ -268,42 +300,6 @@
 
     // Check if we have the object in cache
     NSString *cacheKey = [self md5sumFromString:signature];
-    NSArray *cachedArray = nil;
-
-    if (useCache && self.cacheDelegate && [self.cacheDelegate respondsToSelector:@selector(cachedArrayForKey:requestParams:)]) {
-        cachedArray = [self.cacheDelegate cachedArrayForKey:cacheKey requestParams:newParams];
-    } else if (useCache && self.cacheDelegate && [self.cacheDelegate respondsToSelector:@selector(cachedArrayForKey:)]) {
-        cachedArray = [self.cacheDelegate cachedArrayForKey:cacheKey];
-    }
-
-    if (cachedArray) {
-        if (successHandler) {
-            id returnObject;
-            if (returnDictionary) {
-                returnObject = (cachedArray.count > 0 ? [cachedArray objectAtIndex:0] : @{});
-            } else {
-                returnObject = cachedArray;
-            }
-            successHandler(returnObject);
-        }
-
-        if (self.cacheDelegate && [self.cacheDelegate respondsToSelector:@selector(cacheExpiredForKey:)]) {
-            BOOL expired = [self.cacheDelegate cacheExpiredForKey:cacheKey];
-            if (!expired) {
-                // Not expired? Then don't make the request to the server. Stop here.
-                return nil;
-            }
-        } if (self.cacheDelegate && [self.cacheDelegate respondsToSelector:@selector(cacheExpiredForKey:requestParams:)]) {
-            BOOL expired = [self.cacheDelegate cacheExpiredForKey:cacheKey requestParams:newParams];
-            if (!expired) {
-                // Not expired? Then don't make the request to the server. Stop here.
-                return nil;
-            }
-        } else {
-            // No expiration delegate methods? Stop here.
-            return nil;
-        }
-    }
 
     // We need to send all the params in a sorted fashion
     NSMutableArray *sortedParamsArray = [NSMutableArray array];
@@ -311,11 +307,10 @@
         [sortedParamsArray addObject:[NSString stringWithFormat:@"%@=%@", [self urlEscapeString:key], [self urlEscapeString:[newParams objectForKey:key]]]];
     }
 
-    return [self _performApiCallForMethod:method useCache:useCache signature:cacheKey withSortedParamsArray:sortedParamsArray andOriginalParams:newParams rootXpath:rootXpath returnDictionary:returnDictionary mappingObject:mappingObject successHandler:successHandler failureHandler:failureHandler];
+    return [self _performApiCallForMethod:method signature:cacheKey withSortedParamsArray:sortedParamsArray andOriginalParams:newParams rootXpath:rootXpath returnDictionary:returnDictionary mappingObject:mappingObject successHandler:successHandler failureHandler:failureHandler];
 }
 
-- (NSOperation *)_performApiCallForMethod:(NSString*)method
-                                 useCache:(BOOL)useCache
+- (NSURLSessionDataTask *)_performApiCallForMethod:(NSString*)method
                                 signature:(NSString *)signature
                     withSortedParamsArray:(NSArray *)sortedParamsArray
                         andOriginalParams:(NSDictionary *)originalParams
@@ -325,154 +320,110 @@
                            successHandler:(LastFmReturnBlockWithObject)successHandler
                            failureHandler:(LastFmReturnBlockWithError)failureHandler {
 
-    NSBlockOperation *op = [[NSBlockOperation alloc] init];
-    __unsafe_unretained NSBlockOperation *weakOp = op;
-
-    [op addExecutionBlock:^{
-        if ([weakOp isCancelled]) {
-            return;
+    
+    // Do we need to POST or GET?
+    BOOL doPost = YES;
+    NSArray *methodParts = [method componentsSeparatedByString:@"."];
+    if ([methodParts count] > 1) {
+        NSString *secondPart = [methodParts objectAtIndex:1];
+        if ([secondPart hasPrefix:@"get"]) {
+            doPost = NO;
         }
-
-        // Do we need to POST or GET?
-        BOOL doPost = YES;
-        NSArray *methodParts = [method componentsSeparatedByString:@"."];
-        if ([methodParts count] > 1) {
-            NSString *secondPart = [methodParts objectAtIndex:1];
-            if ([secondPart hasPrefix:@"get"] && ![method isEqualToString:@"auth.getMobileSession"]) {
-                doPost = NO;
+    }
+    
+    NSMutableURLRequest *request;
+    if (doPost) {
+        request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:API_URL]];
+        request.timeoutInterval = self.timeoutInterval;
+        [request setHTTPMethod:@"POST"];
+        [request setHTTPBody:[[NSString stringWithFormat:@"%@&api_sig=%@", [sortedParamsArray componentsJoinedByString:@"&"], signature] dataUsingEncoding:NSUTF8StringEncoding]];
+    } else {
+        NSString *paramsString = [NSString stringWithFormat:@"%@&api_sig=%@", [sortedParamsArray componentsJoinedByString:@"&"], signature];
+        NSString *urlString = [NSString stringWithFormat:@"%@?%@", API_URL, paramsString];
+        
+        request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
+        request.timeoutInterval = self.timeoutInterval;
+    }
+    NSLog(@"LastFM request: %@",request.URL.absoluteString);
+   NSURLSessionDataTask *dataTask = [self.sessionManager dataTaskWithRequest:request uploadProgress:nil downloadProgress:nil completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
+        if (error) {
+            if (failureHandler) {
+                failureHandler(error);
             }
-        }
-
-        NSMutableURLRequest *request;
-        if (doPost) {
-            request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:API_URL]];
-            request.timeoutInterval = self.timeoutInterval;
-            [request setHTTPMethod:@"POST"];
-            [request setHTTPBody:[[NSString stringWithFormat:@"%@&api_sig=%@", [sortedParamsArray componentsJoinedByString:@"&"], signature] dataUsingEncoding:NSUTF8StringEncoding]];
         } else {
-            NSString *paramsString = [NSString stringWithFormat:@"%@&api_sig=%@", [sortedParamsArray componentsJoinedByString:@"&"], signature];
-            NSString *urlString = [NSString stringWithFormat:@"%@?%@", API_URL, paramsString];
-
-            NSURLRequestCachePolicy policy = NSURLRequestUseProtocolCachePolicy;
-            if (!useCache) {
-                policy = NSURLRequestReloadIgnoringLocalAndRemoteCacheData;
+            NSParameterAssert([responseObject isKindOfClass:[DDXMLDocument class]]);
+            if([responseObject isKindOfClass:[DDXMLDocument class]]){
+                @autoreleasepool {
+                    DDXMLDocument *document = (DDXMLDocument *)responseObject;
+                    // Check for Last.fm errors
+                    if (![[[document rootElement] objectAtXPath:@"./@status"] isEqualToString:@"ok"]) {
+                        if (failureHandler) {
+                            NSError *lastfmError = [[NSError alloc] initWithDomain:LastFmServiceErrorDomain
+                                                                              code:[[[document rootElement] objectAtXPath:@"./error/@code"] intValue]
+                                                                          userInfo:[NSDictionary dictionaryWithObjectsAndKeys:[[document rootElement] objectAtXPath:@"./error"], NSLocalizedDescriptionKey, method, @"method", nil]];
+                            
+                            failureHandler(lastfmError);
+                        }
+                        return;
+                    }
+                    NSArray *output = [[document rootElement] nodesForXPath:rootXpath error:&error];
+                    NSMutableArray *returnArray = [NSMutableArray array];
+                    for (DDXMLNode *node in output) {
+                        // Convert this node to a dictionary using the mapping object (keys and xpaths)
+                        NSMutableDictionary *result = [NSMutableDictionary dictionary];
+                        [result setObject:originalParams forKey:@"_params"];
+                        
+                        for (NSString *key in mappingObject) {
+                            NSArray *mappingArray = [mappingObject objectForKey:key];
+                            NSString *xpath = [mappingArray objectAtIndex:0];
+                            NSString *targetClass = [mappingArray objectAtIndex:1];
+                            NSString *value = [node objectAtXPath:xpath];
+                            id correctValue = [self transformValue:value intoClass:targetClass];
+                            if (correctValue != nil) {
+                                [result setObject:correctValue forKey:key];
+                            }
+                        }
+                        
+                        [returnArray addObject:result];
+                    }
+                    if (successHandler) {
+                        id returnObject;
+                        if (returnDictionary) {
+                            returnObject = (returnArray.count > 0 ? [returnArray objectAtIndex:0] : @{});
+                        } else {
+                            returnObject = returnArray;
+                        }
+                        successHandler(returnObject);
+                    }
+                }
             }
-            request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString] cachePolicy:policy timeoutInterval:self.timeoutInterval];
-        }
-
-        NSHTTPURLResponse *response;
-        NSError *error;
-
-        NSData *data = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
-        if ([weakOp isCancelled]) {
-            return;
-        }
-
-        NSNumber *maxAgeNumber = [response.allHeaderFields objectForKey:@"Access-Control-Max-Age"];
-        NSTimeInterval maxAge = [maxAgeNumber integerValue];
-
-        // Check for NSURLConnection errors
-        if (error) {
-            if (failureHandler) {
-                [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-                    failureHandler(error);
-                }];
-            }
-            return;
-        }
-
-        DDXMLDocument *document = [[DDXMLDocument alloc] initWithData:data options:0 error:&error];
-
-        // Check for XML parsing errors
-        if (error) {
-            if (failureHandler) {
-                [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-                    failureHandler(error);
-                }];
-            }
-            return;
-        }
-
-        // Check for Last.fm errors
-        if (![[[document rootElement] objectAtXPath:@"./@status"] isEqualToString:@"ok"]) {
-            if (failureHandler) {
-                [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-                    NSError *lastfmError = [[NSError alloc] initWithDomain:LastFmServiceErrorDomain
-                                                                      code:[[[document rootElement] objectAtXPath:@"./error/@code"] intValue]
-                                                                  userInfo:[NSDictionary dictionaryWithObjectsAndKeys:[[document rootElement] objectAtXPath:@"./error"], NSLocalizedDescriptionKey, method, @"method", nil]];
-
-                    failureHandler(lastfmError);
-                }];
-            }
-            return;
-        }
-
-        NSArray *output = [[document rootElement] nodesForXPath:rootXpath error:&error];
-        NSMutableArray *returnArray = [NSMutableArray array];
-
-        for (DDXMLNode *node in output) {
-            if ([weakOp isCancelled]) {
+            else{
+                // Check for XML parsing errors
+                if (failureHandler) {
+                        failureHandler(error);
+                }
                 return;
             }
-
-            // Convert this node to a dictionary using the mapping object (keys and xpaths)
-            NSMutableDictionary *result = [NSMutableDictionary dictionary];
-            [result setObject:originalParams forKey:@"_params"];
-
-            for (NSString *key in mappingObject) {
-                NSArray *mappingArray = [mappingObject objectForKey:key];
-                NSString *xpath = [mappingArray objectAtIndex:0];
-                NSString *targetClass = [mappingArray objectAtIndex:1];
-                NSString *value = [node objectAtXPath:xpath];
-                id correctValue = [self transformValue:value intoClass:targetClass];
-                if (correctValue != nil) {
-                    [result setObject:correctValue forKey:key];
-                }
-            }
-
-            [returnArray addObject:result];
-        }
-
-        // Add to cache
-        if (!doPost && self.cacheDelegate && [self.cacheDelegate respondsToSelector:@selector(cacheArray:requestParams:forKey:maxAge:)]) {
-            [self.cacheDelegate cacheArray:returnArray requestParams:originalParams forKey:signature maxAge:maxAge];
-        } else if (!doPost && self.cacheDelegate && [self.cacheDelegate respondsToSelector:@selector(cacheArray:forKey:maxAge:)]) {
-            [self.cacheDelegate cacheArray:returnArray forKey:signature maxAge:maxAge];
-        }
-
-        if (successHandler) {
-            [[NSOperationQueue mainQueue] addOperationWithBlock:^{
-                id returnObject;
-                if (returnDictionary) {
-                    returnObject = (returnArray.count > 0 ? [returnArray objectAtIndex:0] : @{});
-                } else {
-                    returnObject = returnArray;
-                }
-                successHandler(returnObject);
-            }];
         }
     }];
-    
-    [self.queue addOperation:op];
-    return op;
+    [dataTask resume];
+    return dataTask;
+
 }
 
-- (BOOL)useCache {
-    BOOL useCache = !self.nextRequestIgnoresCache;
-    self.nextRequestIgnoresCache = NO;
-    return useCache;
-}
+#pragma mark - Artist methods
 
-#pragma mark -
-#pragma mark Artist methods
-
-- (NSOperation *)getInfoForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getInfoForArtist:(NSString *)artist autocorrect:(BOOL)autocorrect successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"bio": @[ @"./bio/content", @"NSString" ],
         @"summary": @[ @"./bio/summary", @"NSString" ],
         @"name": @[ @"./name", @"NSString" ],
         @"url": @[ @"./url", @"NSURL" ],
-        @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
+        @"imageSmall": @[ @"./image[@size=\"small\"]", @"NSURL" ],
+        @"imageMedium": @[ @"./image[@size=\"medium\"]", @"NSURL" ],
+        @"imageLarge": @[ @"./image[@size=\"large\"]", @"NSURL" ],
+        @"imageExtraLarge": @[ @"./image[@size=\"extralarge\"]", @"NSURL" ],
+        @"imageMega": @[ @"./image[@size=\"mega\"]", @"NSURL" ],
         @"listeners": @[ @"./stats/listeners", @"NSNumber" ],
         @"playcount": @[ @"./stats/playcount", @"NSNumber" ],
         @"userplaycount": @[ @"./stats/userplaycount", @"NSNumber" ],
@@ -481,8 +432,7 @@
     };
 
     return [self performApiCallForMethod:@"artist.getInfo"
-                                useCache:[self useCache]
-                              withParams:@{ @"artist": [self forceString:artist] }
+                              withParams:@{ @"artist": [self forceString:artist] ,@"autocorrect":@(autocorrect)}
                                rootXpath:@"./artist"
                         returnDictionary:YES
                            mappingObject:mappingObject
@@ -490,7 +440,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getEventsForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getEventsForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"title": @[ @"./title", @"NSString" ],
         @"headliner": @[ @"./artists/headliner", @"NSString" ],
@@ -506,7 +456,6 @@
     };
 
     return [self performApiCallForMethod:@"artist.getEvents"
-                                useCache:[self useCache]
                               withParams:@{ @"artist": [self forceString:artist] }
                                rootXpath:@"./events/event"
                         returnDictionary:NO
@@ -515,7 +464,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getTopAlbumsForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopAlbumsForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"artist": @[ @"./artist/name", @"NSString" ],
         @"title": @[ @"./name", @"NSString" ],
@@ -525,7 +474,6 @@
     };
 
     return [self performApiCallForMethod:@"artist.getTopAlbums"
-                                useCache:[self useCache]
                              withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
                               rootXpath:@"./topalbums/album"
                        returnDictionary:NO
@@ -534,7 +482,7 @@
                          failureHandler:failureHandler];
 }
 
-- (NSOperation *)getTopTracksForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopTracksForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"playcount": @[ @"./playcount", @"NSNumber" ],
@@ -542,7 +490,6 @@
     };
 
     return [self performApiCallForMethod:@"artist.getTopTracks"
-                                useCache:[self useCache]
                              withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
                               rootXpath:@"./toptracks/track"
                        returnDictionary:NO
@@ -551,7 +498,7 @@
                          failureHandler:failureHandler];
 }
 
-- (NSOperation *)getImagesForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getImagesForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"format": @[ @"format", @"NSString"],
         @"original": @[ @"./sizes/size[@name=\"original\"]", @"NSURL" ],
@@ -580,7 +527,6 @@
     };
 
     return [self performApiCallForMethod:@"artist.getImages"
-                                useCache:[self useCache]
                               withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
                                rootXpath:@"./images/image"
                         returnDictionary:NO
@@ -589,7 +535,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getSimilarArtistsTo:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getSimilarArtistsTo:(NSString *)artist autocorrect:(BOOL)autocorrect limit:(NSUInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"match": @[ @"./match", @"NSNumber" ],
@@ -597,8 +543,7 @@
     };
 
     return [self performApiCallForMethod:@"artist.getSimilar"
-                                useCache:[self useCache]
-                              withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
+                              withParams:@{ @"artist": [self forceString:artist], @"limit": @(limit),@"autocorrect":@(autocorrect) }
                                rootXpath:@"./similarartists/artist"
                         returnDictionary:NO
                            mappingObject:mappingObject
@@ -606,16 +551,36 @@
                          failureHandler:failureHandler];
 }
 
-#pragma mark Album methods
+- (NSURLSessionDataTask *)getTopTagsForArtist:(NSString *)artist autocorrect:(BOOL)autocorrect successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler{
+    NSDictionary *mappingObject = @{
+                                    @"name": @[ @"./name", @"NSString" ],
+                                    @"count": @[ @"./count", @"NSNumber" ],
+                                    @"url": @[ @"./url", @"NSURL" ],
+                                    };
+    
+    return [self performApiCallForMethod:@"artist.getTopTags"
+                              withParams:@{ @"artist": [self forceString:artist], @"autocorrect":@(autocorrect)}
+                               rootXpath:@"./toptags/tag"
+                        returnDictionary:NO
+                           mappingObject:mappingObject
+                          successHandler:successHandler
+                          failureHandler:failureHandler];
+}
 
-- (NSOperation *)getInfoForAlbum:(NSString *)album artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+#pragma mark - Album methods
+
+- (NSURLSessionDataTask *)getInfoForAlbum:(NSString *)album artist:(NSString *)artist autocorrect:(BOOL)autocorrect successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"artist": @[ @"./artist", @"NSString" ],
         @"name": @[ @"./name", @"NSString" ],
         @"listeners": @[ @"./listeners", @"NSNumber" ],
         @"playcount": @[ @"./playcount", @"NSNumber" ],
         @"url": @[ @"./url", @"NSURL" ],
-        @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
+        @"imageSmall": @[ @"./image[@size=\"small\"]", @"NSURL" ],
+        @"imageMedium": @[ @"./image[@size=\"medium\"]", @"NSURL" ],
+        @"imageLarge": @[ @"./image[@size=\"large\"]", @"NSURL" ],
+        @"imageExtraLarge": @[ @"./image[@size=\"extralarge\"]", @"NSURL" ],
+        @"imageMega": @[ @"./image[@size=\"mega\"]", @"NSURL" ],
         @"releasedate": @[ @"./releasedate", @"NSString" ], // deprecated
         @"date": @[ @"./releasedate", @"NSDate" ],
         @"tags": @[ @"./toptags/tag/name", @"NSArray" ],
@@ -624,8 +589,7 @@
     };
 
     return [self performApiCallForMethod:@"album.getInfo"
-                                useCache:[self useCache]
-                              withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album] }
+                              withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album] ,@"autocorrect":@(autocorrect)}
                                rootXpath:@"./album"
                         returnDictionary:YES
                            mappingObject:mappingObject
@@ -633,7 +597,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getTracksForAlbum:(NSString *)album artist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTracksForAlbum:(NSString *)album artist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"rank": @[ @"@rank", @"NSNumber" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
@@ -643,7 +607,6 @@
     };
 
     return [self performApiCallForMethod:@"album.getInfo"
-                                useCache:[self useCache]
                               withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album], @"1": @"1" }
                                rootXpath:@"./album/tracks/track"
                         returnDictionary:NO
@@ -652,7 +615,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getBuyLinksForAlbum:(NSString *)album artist:(NSString *)artist country:(NSString *)country successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getBuyLinksForAlbum:(NSString *)album artist:(NSString *)artist country:(NSString *)country successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"url": @[ @"./buyLink", @"NSURL" ],
         @"price": @[ @"./price/amount", @"NSNumber" ],
@@ -662,7 +625,6 @@
     };
 
     return [self performApiCallForMethod:@"album.getBuylinks"
-                                useCache:[self useCache]
                               withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album], @"country": [self forceString:country] }
                                rootXpath:@"./affiliations/downloads/affiliation"
                         returnDictionary:NO
@@ -671,7 +633,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getTopTagsForAlbum:(NSString *)album artist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopTagsForAlbum:(NSString *)album artist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"count": @[ @"./count", @"NSNumber" ],
@@ -679,7 +641,6 @@
     };
 
     return [self performApiCallForMethod:@"album.getTopTags"
-                                useCache:[self useCache]
                               withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album] }
                                rootXpath:@"./toptags/tag"
                         returnDictionary:NO
@@ -688,9 +649,30 @@
                           failureHandler:failureHandler];
 }
 
-#pragma mark Track methods
+#pragma mark - Tag methods
 
-- (NSOperation *)getInfoForTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopAlbumsForTag:(NSString *)tag successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler{
+    NSDictionary *mappingObject = @{
+                                    @"artist": @[ @"./artist/name", @"NSString" ],
+                                    @"name": @[ @"./name", @"NSString" ],
+                                    @"url": @[ @"./url", @"NSURL" ],
+                                    @"imageSmall": @[ @"./image[@size=\"small\"]", @"NSURL" ],
+                                    @"imageMedium": @[ @"./image[@size=\"medium\"]", @"NSURL" ],
+                                    @"imageLarge": @[ @"./image[@size=\"large\"]", @"NSURL" ],
+                                    @"imageExtraLarge": @[ @"./image[@size=\"extralarge\"]", @"NSURL" ],
+                                    };
+    return [self performApiCallForMethod:@"tag.getTopAlbums"
+                              withParams:@{ @"tag": [self forceString:tag], @"limit": @"10"}
+                               rootXpath:@"./albums/album"
+                        returnDictionary:NO
+                           mappingObject:mappingObject
+                          successHandler:successHandler
+                          failureHandler:failureHandler];
+}
+
+#pragma mark - Track methods
+
+- (NSURLSessionDataTask *)getInfoForTrack:(NSString *)title artist:(NSString *)artist autocorrect:(BOOL)autocorrect successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"listeners": @[ @"./listeners", @"NSNumber" ],
@@ -698,7 +680,11 @@
         @"tags": @[ @"./toptags/tag/name", @"NSArray" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
         @"album": @[ @"./album/title", @"NSString" ],
-        @"image": @[ @"./album/image[@size=\"large\"]", @"NSURL" ],
+        @"imageSmall": @[ @"./album/image[@size=\"small\"]", @"NSURL" ],
+        @"imageMedium": @[ @"./album/image[@size=\"medium\"]", @"NSURL" ],
+        @"imageLarge": @[ @"./album/image[@size=\"large\"]", @"NSURL" ],
+        @"imageExtraLarge": @[ @"./album/image[@size=\"extralarge\"]", @"NSURL" ],
+        @"imageMega": @[ @"./album/image[@size=\"mega\"]", @"NSURL" ],
         @"wiki": @[ @"./wiki/summary", @"NSString" ],
         @"duration": @[ @"./duration", @"NSNumber" ],
         @"userplaycount": @[ @"./userplaycount", @"NSNumber" ],
@@ -707,8 +693,7 @@
     };
 
     return [self performApiCallForMethod:@"track.getInfo"
-                                useCache:[self useCache]
-                              withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] }
+                              withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] ,@"autocorrect":@(autocorrect)}
                                rootXpath:@"./track"
                         returnDictionary:YES
                            mappingObject:mappingObject
@@ -716,7 +701,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getInfoForTrack:(NSString *)musicBrainId successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getInfoForTrack:(NSString *)musicBrainId successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"listeners": @[ @"./listeners", @"NSNumber" ],
@@ -733,7 +718,6 @@
     };
 
     return [self performApiCallForMethod:@"track.getInfo"
-                                useCache:[self useCache]
                              withParams:@{ @"mbid": [self forceString:musicBrainId] }
                               rootXpath:@"./track"
                        returnDictionary:YES
@@ -742,9 +726,8 @@
                          failureHandler:failureHandler];
 }
 
-- (NSOperation *)loveTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)loveTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     return [self performApiCallForMethod:@"track.love"
-                                useCache:[self useCache]
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] }
                                rootXpath:@"."
                         returnDictionary:YES
@@ -753,9 +736,8 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)unloveTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)unloveTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     return [self performApiCallForMethod:@"track.unlove"
-                                useCache:[self useCache]
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] }
                                rootXpath:@"."
                         returnDictionary:YES
@@ -764,9 +746,8 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)banTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)banTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     return [self performApiCallForMethod:@"track.ban"
-                                useCache:[self useCache]
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] }
                                rootXpath:@"."
                         returnDictionary:YES
@@ -775,9 +756,8 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)unbanTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)unbanTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     return [self performApiCallForMethod:@"track.unban"
-                                useCache:[self useCache]
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] }
                                rootXpath:@"."
                         returnDictionary:YES
@@ -786,7 +766,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getBuyLinksForTrack:(NSString *)title artist:(NSString *)artist country:(NSString *)country successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getBuyLinksForTrack:(NSString *)title artist:(NSString *)artist country:(NSString *)country successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"url": @[ @"./buyLink", @"NSURL" ],
         @"price": @[ @"./price/amount", @"NSNumber" ],
@@ -796,7 +776,6 @@
     };
 
     return [self performApiCallForMethod:@"track.getBuylinks"
-                                useCache:[self useCache]
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist], @"country": [self forceString:country] }
                                rootXpath:@"./affiliations/downloads/affiliation"
                         returnDictionary:NO
@@ -805,7 +784,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getSimilarTracksTo:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getSimilarTracksTo:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"rank": @[ @"@rank", @"NSNumber" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
@@ -815,7 +794,6 @@
     };
 
     return [self performApiCallForMethod:@"track.getsimilar"
-                                useCache:[self useCache]
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] }
                                rootXpath:@"./similartracks/track"
                         returnDictionary:NO
@@ -824,10 +802,10 @@
                           failureHandler:failureHandler];
 }
 
-#pragma mark User methods
+#pragma mark - User methods
 
 // Please note: to use this method, your API key needs special permission
-- (NSOperation *)createUserWithUsername:(NSString *)username password:(NSString *)password email:(NSString *)email successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)createUserWithUsername:(NSString *)username password:(NSString *)password email:(NSString *)email successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"url": @[ @"./url", @"NSURL" ],
@@ -840,7 +818,6 @@
     };
 
     return [self performApiCallForMethod:@"user.signUp"
-                                useCache:NO
                               withParams:params
                                rootXpath:@"./user"
                         returnDictionary:YES
@@ -849,9 +826,10 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getSessionForUser:(NSString *)username password:(NSString *)password successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getSessionForUser:(NSString *)username password:(NSString *)password successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     username = [self forceString:username];
     password = [self forceString:password];
+    NSString *authToken = [self md5sumFromString:[NSString stringWithFormat:@"%@%@", [username lowercaseString], [self md5sumFromString:password]]];
 
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
@@ -860,8 +838,7 @@
     };
 
     return [self performApiCallForMethod:@"auth.getMobileSession"
-                                useCache:NO
-                              withParams:@{ @"username": [username lowercaseString], @"password": password }
+                              withParams:@{ @"username": [username lowercaseString], @"authToken": authToken }
                                rootXpath:@"./session"
                         returnDictionary:YES
                             mappingObject:mappingObject
@@ -869,7 +846,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getSessionInfoWithSuccessHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getSessionInfoWithSuccessHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./session/name", @"NSString" ],
         @"subscriber": @[ @"./session/subscriber", @"NSNumber" ],
@@ -882,7 +859,6 @@
     };
 
     return [self performApiCallForMethod:@"auth.getSessionInfo"
-                                useCache:NO
                               withParams:@{}
                                rootXpath:@"./application"
                         returnDictionary:YES
@@ -891,7 +867,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)sendNowPlayingTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album withDuration:(NSTimeInterval)duration successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)sendNowPlayingTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album withDuration:(NSTimeInterval)duration successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *params = @{
         @"track": [self forceString:track],
         @"artist": [self forceString:artist],
@@ -900,7 +876,6 @@
     };
 
     return [self performApiCallForMethod:@"track.updateNowPlaying"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"."
                         returnDictionary:YES
@@ -909,7 +884,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)sendScrobbledTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album withDuration:(NSTimeInterval)duration atTimestamp:(NSTimeInterval)timestamp successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)sendScrobbledTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album withDuration:(NSTimeInterval)duration atTimestamp:(NSTimeInterval)timestamp successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *params = @{
         @"track": [self forceString:track],
         @"artist": [self forceString:artist],
@@ -919,7 +894,7 @@
     };
 
     return [self performApiCallForMethod:@"track.scrobble"
-                                useCache:[self useCache]
+                                
                               withParams:params
                                rootXpath:@"."
                         returnDictionary:YES
@@ -928,7 +903,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getNewReleasesForUserBasedOnRecommendations:(BOOL)basedOnRecommendations successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getNewReleasesForUserBasedOnRecommendations:(BOOL)basedOnRecommendations successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
@@ -943,7 +918,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getNewReleases"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./albums/album"
                         returnDictionary:NO
@@ -952,7 +926,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getRecommendedAlbumsWithLimit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getRecommendedAlbumsWithLimit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
@@ -961,7 +935,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getRecommendedAlbums"
-                                useCache:[self useCache]
                               withParams:@{ @"limit": @(limit) }
                                rootXpath:@"./recommendations/album"
                         returnDictionary:NO
@@ -975,9 +948,9 @@
     self.username = nil;
 }
 
-#pragma mark General User methods
+#pragma mark - General User methods
 
-- (NSOperation *)getInfoForUserOrNil:(NSString *)username successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getInfoForUserOrNil:(NSString *)username successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./realname", @"NSString" ],
         @"username": @[ @"./name", @"NSString" ],
@@ -996,7 +969,6 @@
     }
 
     return [self performApiCallForMethod:@"user.getInfo"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./user"
                         returnDictionary:YES
@@ -1005,7 +977,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getTopArtistsForUserOrNil:(NSString *)username period:(LastFmPeriod)period limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopArtistsForUserOrNil:(NSString *)username period:(LastFmPeriod)period limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
@@ -1020,7 +992,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getTopArtists"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./topartists/artist"
                         returnDictionary:NO
@@ -1029,7 +1000,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getRecentTracksForUserOrNil:(NSString *)username limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getRecentTracksForUserOrNil:(NSString *)username limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"artist": @[ @"./artist", @"NSString" ],
@@ -1045,7 +1016,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getRecentTracks"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./recenttracks/track"
                         returnDictionary:NO
@@ -1054,7 +1024,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getLovedTracksForUserOrNil:(NSString *)username limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getLovedTracksForUserOrNil:(NSString *)username limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
@@ -1069,7 +1039,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getLovedTracks"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./lovedtracks/track"
                         returnDictionary:NO
@@ -1078,7 +1047,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getTopTracksForUserOrNil:(NSString *)username period:(LastFmPeriod)period limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopTracksForUserOrNil:(NSString *)username period:(LastFmPeriod)period limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
@@ -1093,7 +1062,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getTopTracks"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./toptracks/track"
                         returnDictionary:NO
@@ -1102,7 +1070,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getEventsForUserOrNil:(NSString *)username festivalsOnly:(BOOL)festivalsonly limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getEventsForUserOrNil:(NSString *)username festivalsOnly:(BOOL)festivalsonly limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"title": @[ @"./title", @"NSString" ],
         @"headliner": @[ @"./artists/headliner", @"NSString" ],
@@ -1125,7 +1093,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getEvents"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./events/event"
                         returnDictionary:NO
@@ -1134,7 +1101,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getTopAlbumsForUserOrNil:(NSString *)username period:(LastFmPeriod)period limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopAlbumsForUserOrNil:(NSString *)username period:(LastFmPeriod)period limit:(NSInteger)limit successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"artist": @[ @"./artist/name", @"NSString" ],
@@ -1150,7 +1117,6 @@
     };
 
     return [self performApiCallForMethod:@"user.getTopAlbums"
-                                useCache:[self useCache]
                               withParams:params
                                rootXpath:@"./topalbums/album"
                         returnDictionary:NO
@@ -1159,9 +1125,9 @@
                           failureHandler:failureHandler];
 }
 
-#pragma mark Chart methods
+#pragma mark - Chart methods
 
-- (NSOperation *)getTopTracksWithLimit:(NSInteger)limit page:(NSInteger)page successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getTopTracksWithLimit:(NSInteger)limit page:(NSInteger)page successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"playcount": @[ @"./playcount", @"NSNumber" ],
@@ -1171,7 +1137,6 @@
     };
 
     return [self performApiCallForMethod:@"chart.getTopTracks"
-                                useCache:[self useCache]
                               withParams:@{ @"limit": @(limit), @"page": @(page) }
                                rootXpath:@"./tracks/track"
                         returnDictionary:NO
@@ -1180,7 +1145,7 @@
                           failureHandler:failureHandler];
 }
 
-- (NSOperation *)getHypedTracksWithLimit:(NSInteger)limit page:(NSInteger)page successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getHypedTracksWithLimit:(NSInteger)limit page:(NSInteger)page successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
@@ -1189,7 +1154,6 @@
     };
 
     return [self performApiCallForMethod:@"chart.getHypedTracks"
-                                useCache:[self useCache]
                               withParams:@{ @"limit": @(limit), @"page": @(page) }
                                rootXpath:@"./tracks/track"
                         returnDictionary:NO
@@ -1198,9 +1162,9 @@
                           failureHandler:failureHandler];
 }
 
-#pragma mark Geo methods
+#pragma mark - Geo methods
 
-- (NSOperation *)getEventsForLocation:(NSString *)location successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+- (NSURLSessionDataTask *)getEventsForLocation:(NSString *)location successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
     NSDictionary *mappingObject = @{
         @"title": @[ @"./title", @"NSString" ],
         @"venue": @[ @"./venue/name", @"NSString" ],
@@ -1212,7 +1176,6 @@
     };
 
     return [self performApiCallForMethod:@"geo.getEvents"
-                                useCache:[self useCache]
                               withParams:@{ @"location": [self forceString:location] }
                                rootXpath:@"./events/event"
                         returnDictionary:NO
@@ -1222,3 +1185,59 @@
 }
 
 @end
+
+
+
+
+
+@implementation DDXMLParserResponseSerializer
+
++ (instancetype)serializer {
+    DDXMLParserResponseSerializer *serializer = [[self alloc] init];
+    return serializer;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (!self) {
+        return nil;
+    }
+    self.acceptableContentTypes = [[NSSet alloc] initWithObjects:@"application/xml", @"text/xml", nil];
+    return self;
+}
+
+#pragma mark - AFURLResponseSerialization
+
+static BOOL DDErrorOrUnderlyingErrorHasCodeInDomain(NSError *error, NSInteger code, NSString *domain) {
+    if ([error.domain isEqualToString:domain] && error.code == code) {
+        return YES;
+    } else if (error.userInfo[NSUnderlyingErrorKey]) {
+        return DDErrorOrUnderlyingErrorHasCodeInDomain(error.userInfo[NSUnderlyingErrorKey], code, domain);
+    }
+    
+    return NO;
+}
+
+- (id)responseObjectForResponse:(NSHTTPURLResponse *)response
+                           data:(NSData *)data
+                          error:(NSError *__autoreleasing *)error
+{
+    if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
+        if (!error || DDErrorOrUnderlyingErrorHasCodeInDomain(*error, NSURLErrorCannotDecodeContentData, AFURLResponseSerializationErrorDomain)) {
+            return nil;
+        }
+    }
+    
+//#ifndef __OPTIMIZE__
+//    NSString *respStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+//    NSLog(@"lastfm response: %@",respStr);
+//#endif
+    
+    NSError *docError = nil;
+    DDXMLDocument *document = [[DDXMLDocument alloc] initWithData:data options:0 error:&docError];
+    return document;
+}
+
+@end
+
+
