@@ -69,7 +69,6 @@
 @implementation LastFm
 
 + (LastFm *)sharedInstance {
-#ifdef APP_LAST_FM
     static dispatch_once_t pred;
     static LastFm *sharedInstance = nil;
     dispatch_once(&pred, ^{
@@ -81,8 +80,6 @@
         sharedInstance.timeoutInterval = 30.0;
     });
     return sharedInstance;
-#endif
-    return nil;
 }
 
 - (instancetype)init {
