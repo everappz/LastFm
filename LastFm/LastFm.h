@@ -60,7 +60,10 @@ typedef void (^LastFmReturnBlockWithError)(NSError *error);
 @property (nonatomic) NSTimeInterval timeoutInterval;
 @property (nonatomic) BOOL nextRequestIgnoresCache;
 
++ (void)setSharedInstance:(LastFm *)sharedInstance;
 + (LastFm *)sharedInstance;
+- (instancetype)initWithApiKey:(NSString *)apiKey apiSecret:(NSString *)apiSecret;
+    
 - (NSString *)forceString:(NSString *)value;
 - (NSURLSessionDataTask *)performApiCallForMethod:(NSString*)method withParams:(NSDictionary *)params rootXpath:(NSString *)rootXpath returnDictionary:(BOOL)returnDictionary mappingObject:(NSDictionary *)mappingObject successHandler:(LastFmReturnBlockWithObject)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler;
 
