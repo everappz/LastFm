@@ -65,28 +65,23 @@
 
 @end
 
+static LastFm *_sharedInstance = nil;
 
 @implementation LastFm
 
-+ (LastFm *)sharedInstance {
-    static dispatch_once_t pred;
-    static LastFm *sharedInstance = nil;
-    dispatch_once(&pred, ^{
-        sharedInstance = [[self alloc] init];
-        //http://www.last.fm/api/accounts
-        //https://www.last.fm/api/account/create
-        sharedInstance.apiKey = APP_LAST_FM_API_KEY;
-        sharedInstance.apiSecret = APP_LAST_FM_API_SECRET;
-        sharedInstance.timeoutInterval = 30.0;
-    });
-    return sharedInstance;
++ (void)setSharedInstance:(LastFm *)sharedInstance{
+    _sharedInstance = sharedInstance;
 }
 
-- (instancetype)init {
++ (LastFm *)sharedInstance {
+    return _sharedInstance;
+}
+
+- (instancetype)initWithApiKey:(NSString *)apiKey apiSecret:(NSString *)apiSecret{
     self = [super init];
     if (self) {
-        self.apiKey = @"";
-        self.apiSecret = @"";
+        self.apiKey = apiKey;
+        self.apiSecret = apiSecret;
         self.timeoutInterval = 30.0;
         self.sessionManager = [[self class] sharedSessionManager];
     }
