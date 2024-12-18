@@ -35,7 +35,7 @@
 - (id)objectAtXPath:(NSString *)XPath {
     NSError *err;
     NSArray *nodes = [self nodesForXPath:XPath error:&err];
-
+    
     if ([nodes count]) {
         NSMutableArray *strings = [[NSMutableArray alloc] init];
         for (DDXMLNode *node in nodes) {
@@ -113,6 +113,7 @@ static LastFm *_sharedInstance = nil;
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"EEE, dd MMM yyyy HH:mm:ss"];
+        [formatter setTimeZone:[NSTimeZone timeZoneWithAbbreviation:@"UTC"]];
     });
     return formatter;
 }
@@ -124,6 +125,7 @@ static LastFm *_sharedInstance = nil;
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"dd MMM yyyy, HH:mm"];
+        [formatter setTimeZone:[NSTimeZone timeZoneWithAbbreviation:@"UTC"]];
     });
     return formatter;
 }
@@ -135,6 +137,7 @@ static LastFm *_sharedInstance = nil;
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"EEE, dd MMM yyyy HH:mm:ss Z"];
+        [formatter setTimeZone:[NSTimeZone timeZoneWithAbbreviation:@"UTC"]];
     });
     return formatter;
 }
@@ -146,6 +149,7 @@ static LastFm *_sharedInstance = nil;
         formatter = [[NSDateFormatter alloc] init];
         [formatter setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"]];
         [formatter setDateFormat:@"yyyy-MM-dd HH:mm"];
+        [formatter setTimeZone:[NSTimeZone timeZoneWithAbbreviation:@"UTC"]];
     });
     return formatter;
 }
@@ -162,24 +166,24 @@ static LastFm *_sharedInstance = nil;
 #pragma mark - Private methods
 
 - (NSString *)md5sumFromString:(NSString *)string {
-	unsigned char digest[CC_MD5_DIGEST_LENGTH], i;
-	CC_MD5([string UTF8String], (CC_LONG)[string lengthOfBytesUsingEncoding:NSUTF8StringEncoding], digest);
-	NSMutableString *ms = [NSMutableString string];
-	for (i=0;i<CC_MD5_DIGEST_LENGTH;i++) {
-		[ms appendFormat: @"%02x", (int)(digest[i])];
-	}
-	return [ms copy];
+    unsigned char digest[CC_MD5_DIGEST_LENGTH], i;
+    CC_MD5([string UTF8String], (CC_LONG)[string lengthOfBytesUsingEncoding:NSUTF8StringEncoding], digest);
+    NSMutableString *ms = [NSMutableString string];
+    for (i=0;i<CC_MD5_DIGEST_LENGTH;i++) {
+        [ms appendFormat: @"%02x", (int)(digest[i])];
+    }
+    return [ms copy];
 }
 
 - (NSString*)urlEscapeString:(id)unencodedString {
     if ([unencodedString isKindOfClass:[NSString class]]) {
         NSString *s = (__bridge_transfer NSString *)CFURLCreateStringByAddingPercentEscapes(
-            NULL,
-            (__bridge CFStringRef)unencodedString,
-            NULL,
-            (CFStringRef)@"!*'();:@&=+$,/?%#[]", 
-            kCFStringEncodingUTF8
-        );
+                                                                                            NULL,
+                                                                                            (__bridge CFStringRef)unencodedString,
+                                                                                            NULL,
+                                                                                            (CFStringRef)@"!*'();:@&=+$,/?%#[]",
+                                                                                            kCFStringEncodingUTF8
+                                                                                            );
         return s;
     }
     return unencodedString;
@@ -189,21 +193,21 @@ static LastFm *_sharedInstance = nil;
     if ([value isKindOfClass:NSClassFromString(targetClass)]) {
         return value;
     }
-
+    
     if ([targetClass isEqualToString:@"NSNumber"]) {
         if ([value isKindOfClass:[NSString class]] && [value length]) {
             return [[LastFm numberFormatter] numberFromString:value];
         }
         return @0;
     }
-
+    
     if ([targetClass isEqualToString:@"NSURL"]) {
         if ([value isKindOfClass:[NSString class]] && [value length]) {
             return [NSURL URLWithString:value];
         }
         return nil;
     }
-
+    
     if ([targetClass isEqualToString:@"NSDate"]) {
         NSDate *date = [[LastFm dateFormatter] dateFromString:value];
         if (!date) {
@@ -217,15 +221,16 @@ static LastFm *_sharedInstance = nil;
         }
         return date;
     }
-
+    
     if ([targetClass isEqualToString:@"NSArray"]) {
         if ([value isKindOfClass:[NSString class]] && [value length]) {
             return [NSArray arrayWithObject:value];
         }
         return [NSArray array];
     }
-
+    
     NSLog(@"Invalid targetClass (%@)", targetClass);
+    NSCParameterAssert(NO);
     return value;
 }
 
@@ -239,23 +244,23 @@ static LastFm *_sharedInstance = nil;
         case kLastFmPeriodOverall:
             return @"overall";
             break;
-
+            
         case kLastFmPeriodWeek:
             return @"7day";
             break;
-
+            
         case kLastFmPeriodMonth:
             return @"1month";
             break;
-
+            
         case kLastFmPeriodQuarter:
             return @"3month";
             break;
-
+            
         case kLastFmPeriodHalfYear:
             return @"6month";
             break;
-
+            
         case kLastFmPeriodYear:
             return @"12month";
             break;
@@ -263,25 +268,25 @@ static LastFm *_sharedInstance = nil;
 }
 
 - (NSURLSessionDataTask *)performApiCallForMethod:(NSString*)method
-                              withParams:(NSDictionary *)params
-                               rootXpath:(NSString *)rootXpath
-                        returnDictionary:(BOOL)returnDictionary
-                           mappingObject:(NSDictionary *)mappingObject
-                          successHandler:(LastFmReturnBlockWithObject)successHandler
-                          failureHandler:(LastFmReturnBlockWithError)failureHandler {
-
+                                       withParams:(NSDictionary *)params
+                                        rootXpath:(NSString *)rootXpath
+                                 returnDictionary:(BOOL)returnDictionary
+                                    mappingObject:(NSDictionary *)mappingObject
+                                   successHandler:(LastFmReturnBlockWithObject)successHandler
+                                   failureHandler:(LastFmReturnBlockWithError)failureHandler {
+    
     NSMutableDictionary *newParams = [params mutableCopy];
     [newParams setObject:method forKey:@"method"];
     [newParams setObject:self.apiKey forKey:@"api_key"];
-
+    
     if (self.session) {
         [newParams setObject:self.session forKey:@"sk"];
     }
-
+    
     if (self.username && ![params objectForKey:@"username"]) {
         [newParams setObject:self.username forKey:@"username"];
     }
-
+    
     // Create signature by sorting all the parameters
     NSArray *sortedParamKeys = [[newParams allKeys] sortedArrayUsingSelector:@selector(compare:)];
     NSMutableString *signature = [[NSMutableString alloc] init];
@@ -289,29 +294,29 @@ static LastFm *_sharedInstance = nil;
         [signature appendString:[NSString stringWithFormat:@"%@%@", key, [newParams objectForKey:key]]];
     }
     [signature appendString:self.apiSecret];
-
+    
     // Check if we have the object in cache
     NSString *cacheKey = [self md5sumFromString:signature];
-
+    
     // We need to send all the params in a sorted fashion
     NSMutableArray *sortedParamsArray = [NSMutableArray array];
     for (NSString *key in sortedParamKeys) {
         [sortedParamsArray addObject:[NSString stringWithFormat:@"%@=%@", [self urlEscapeString:key], [self urlEscapeString:[newParams objectForKey:key]]]];
     }
-
+    
     return [self _performApiCallForMethod:method signature:cacheKey withSortedParamsArray:sortedParamsArray andOriginalParams:newParams rootXpath:rootXpath returnDictionary:returnDictionary mappingObject:mappingObject successHandler:successHandler failureHandler:failureHandler];
 }
 
 - (NSURLSessionDataTask *)_performApiCallForMethod:(NSString*)method
-                                signature:(NSString *)signature
-                    withSortedParamsArray:(NSArray *)sortedParamsArray
-                        andOriginalParams:(NSDictionary *)originalParams
-                                rootXpath:(NSString *)rootXpath
-                         returnDictionary:(BOOL)returnDictionary
-                            mappingObject:(NSDictionary *)mappingObject
-                           successHandler:(LastFmReturnBlockWithObject)successHandler
-                           failureHandler:(LastFmReturnBlockWithError)failureHandler {
-
+                                         signature:(NSString *)signature
+                             withSortedParamsArray:(NSArray *)sortedParamsArray
+                                 andOriginalParams:(NSDictionary *)originalParams
+                                         rootXpath:(NSString *)rootXpath
+                                  returnDictionary:(BOOL)returnDictionary
+                                     mappingObject:(NSDictionary *)mappingObject
+                                    successHandler:(LastFmReturnBlockWithObject)successHandler
+                                    failureHandler:(LastFmReturnBlockWithError)failureHandler {
+    
     
     // Do we need to POST or GET?
     BOOL doPost = YES;
@@ -337,7 +342,7 @@ static LastFm *_sharedInstance = nil;
         request.timeoutInterval = self.timeoutInterval;
     }
     NSLog(@"LastFM request: %@",request.URL.absoluteString);
-   NSURLSessionDataTask *dataTask = [self.sessionManager dataTaskWithRequest:request uploadProgress:nil downloadProgress:nil completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
+    NSURLSessionDataTask *dataTask = [self.sessionManager dataTaskWithRequest:request uploadProgress:nil downloadProgress:nil completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
         if (error) {
             if (failureHandler) {
                 failureHandler(error);
@@ -392,7 +397,7 @@ static LastFm *_sharedInstance = nil;
             else{
                 // Check for XML parsing errors
                 if (failureHandler) {
-                        failureHandler(error);
+                    failureHandler(error);
                 }
                 return;
             }
@@ -400,7 +405,7 @@ static LastFm *_sharedInstance = nil;
     }];
     [dataTask resume];
     return dataTask;
-
+    
 }
 
 #pragma mark - Artist methods
@@ -422,7 +427,7 @@ static LastFm *_sharedInstance = nil;
         @"tags": @[ @"./tags/tag/name", @"NSArray" ],
         @"ontour": @[ @"./ontour", @"NSNumber" ],
     };
-
+    
     return [self performApiCallForMethod:@"artist.getInfo"
                               withParams:@{ @"artist": [self forceString:artist] ,@"autocorrect":@(autocorrect)}
                                rootXpath:@"./artist"
@@ -446,7 +451,7 @@ static LastFm *_sharedInstance = nil;
         @"country": @[ @"./venue/location/country", @"NSString" ],
         @"venue_url": @[ @"./venue/website", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"artist.getEvents"
                               withParams:@{ @"artist": [self forceString:artist] }
                                rootXpath:@"./events/event"
@@ -464,14 +469,14 @@ static LastFm *_sharedInstance = nil;
         @"url": @[ @"./url", @"NSURL" ],
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"artist.getTopAlbums"
-                             withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
-                              rootXpath:@"./topalbums/album"
-                       returnDictionary:NO
-                          mappingObject:mappingObject
-                         successHandler:successHandler
-                         failureHandler:failureHandler];
+                              withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
+                               rootXpath:@"./topalbums/album"
+                        returnDictionary:NO
+                           mappingObject:mappingObject
+                          successHandler:successHandler
+                          failureHandler:failureHandler];
 }
 
 - (NSURLSessionDataTask *)getTopTracksForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
@@ -480,14 +485,14 @@ static LastFm *_sharedInstance = nil;
         @"playcount": @[ @"./playcount", @"NSNumber" ],
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"artist.getTopTracks"
-                             withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
-                              rootXpath:@"./toptracks/track"
-                       returnDictionary:NO
-                          mappingObject:mappingObject
-                         successHandler:successHandler
-                         failureHandler:failureHandler];
+                              withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
+                               rootXpath:@"./toptracks/track"
+                        returnDictionary:NO
+                           mappingObject:mappingObject
+                          successHandler:successHandler
+                          failureHandler:failureHandler];
 }
 
 - (NSURLSessionDataTask *)getImagesForArtist:(NSString *)artist successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
@@ -517,7 +522,7 @@ static LastFm *_sharedInstance = nil;
         @"thumbsup": @[ @"./votes/thumbsup", @"NSNumber" ],
         @"thumbsdown": @[ @"./votes/thumbsdown", @"NSNumber" ],
     };
-
+    
     return [self performApiCallForMethod:@"artist.getImages"
                               withParams:@{ @"artist": [self forceString:artist], @"limit": @"500" }
                                rootXpath:@"./images/image"
@@ -533,22 +538,22 @@ static LastFm *_sharedInstance = nil;
         @"match": @[ @"./match", @"NSNumber" ],
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
     };
-
+    
     return [self performApiCallForMethod:@"artist.getSimilar"
                               withParams:@{ @"artist": [self forceString:artist], @"limit": @(limit),@"autocorrect":@(autocorrect) }
                                rootXpath:@"./similarartists/artist"
                         returnDictionary:NO
                            mappingObject:mappingObject
-                         successHandler:successHandler
-                         failureHandler:failureHandler];
+                          successHandler:successHandler
+                          failureHandler:failureHandler];
 }
 
 - (NSURLSessionDataTask *)getTopTagsForArtist:(NSString *)artist autocorrect:(BOOL)autocorrect successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler{
     NSDictionary *mappingObject = @{
-                                    @"name": @[ @"./name", @"NSString" ],
-                                    @"count": @[ @"./count", @"NSNumber" ],
-                                    @"url": @[ @"./url", @"NSURL" ],
-                                    };
+        @"name": @[ @"./name", @"NSString" ],
+        @"count": @[ @"./count", @"NSNumber" ],
+        @"url": @[ @"./url", @"NSURL" ],
+    };
     
     return [self performApiCallForMethod:@"artist.getTopTags"
                               withParams:@{ @"artist": [self forceString:artist], @"autocorrect":@(autocorrect)}
@@ -579,7 +584,7 @@ static LastFm *_sharedInstance = nil;
         @"userplaycount": @[ @"./userplaycount", @"NSNumber" ],
         @"summary": @[ @"./wiki/summary", @"NSString" ],
     };
-
+    
     return [self performApiCallForMethod:@"album.getInfo"
                               withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album] ,@"autocorrect":@(autocorrect)}
                                rootXpath:@"./album"
@@ -597,7 +602,7 @@ static LastFm *_sharedInstance = nil;
         @"duration": @[ @"./duration", @"NSNumber" ],
         @"url": @[ @"./url", @"NSURL" ],
     };
-
+    
     return [self performApiCallForMethod:@"album.getInfo"
                               withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album], @"1": @"1" }
                                rootXpath:@"./album/tracks/track"
@@ -615,7 +620,7 @@ static LastFm *_sharedInstance = nil;
         @"name": @[ @"./supplierName", @"NSString" ],
         @"icon": @[ @"./supplierIcon", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"album.getBuylinks"
                               withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album], @"country": [self forceString:country] }
                                rootXpath:@"./affiliations/downloads/affiliation"
@@ -631,7 +636,7 @@ static LastFm *_sharedInstance = nil;
         @"count": @[ @"./count", @"NSNumber" ],
         @"url": @[ @"./url", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"album.getTopTags"
                               withParams:@{ @"artist": [self forceString:artist], @"album": [self forceString:album] }
                                rootXpath:@"./toptags/tag"
@@ -645,14 +650,14 @@ static LastFm *_sharedInstance = nil;
 
 - (NSURLSessionDataTask *)getTopAlbumsForTag:(NSString *)tag successHandler:(LastFmReturnBlockWithArray)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler{
     NSDictionary *mappingObject = @{
-                                    @"artist": @[ @"./artist/name", @"NSString" ],
-                                    @"name": @[ @"./name", @"NSString" ],
-                                    @"url": @[ @"./url", @"NSURL" ],
-                                    @"imageSmall": @[ @"./image[@size=\"small\"]", @"NSURL" ],
-                                    @"imageMedium": @[ @"./image[@size=\"medium\"]", @"NSURL" ],
-                                    @"imageLarge": @[ @"./image[@size=\"large\"]", @"NSURL" ],
-                                    @"imageExtraLarge": @[ @"./image[@size=\"extralarge\"]", @"NSURL" ],
-                                    };
+        @"artist": @[ @"./artist/name", @"NSString" ],
+        @"name": @[ @"./name", @"NSString" ],
+        @"url": @[ @"./url", @"NSURL" ],
+        @"imageSmall": @[ @"./image[@size=\"small\"]", @"NSURL" ],
+        @"imageMedium": @[ @"./image[@size=\"medium\"]", @"NSURL" ],
+        @"imageLarge": @[ @"./image[@size=\"large\"]", @"NSURL" ],
+        @"imageExtraLarge": @[ @"./image[@size=\"extralarge\"]", @"NSURL" ],
+    };
     return [self performApiCallForMethod:@"tag.getTopAlbums"
                               withParams:@{ @"tag": [self forceString:tag], @"limit": @"10"}
                                rootXpath:@"./albums/album"
@@ -683,7 +688,7 @@ static LastFm *_sharedInstance = nil;
         @"userloved": @[ @"./userloved", @"NSNumber" ],
         @"url": @[ @"./url", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"track.getInfo"
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] ,@"autocorrect":@(autocorrect)}
                                rootXpath:@"./track"
@@ -708,14 +713,14 @@ static LastFm *_sharedInstance = nil;
         @"userloved": @[ @"./userloved", @"NSNumber" ],
         @"url": @[ @"./url", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"track.getInfo"
-                             withParams:@{ @"mbid": [self forceString:musicBrainId] }
-                              rootXpath:@"./track"
-                       returnDictionary:YES
-                          mappingObject:mappingObject
-                         successHandler:successHandler
-                         failureHandler:failureHandler];
+                              withParams:@{ @"mbid": [self forceString:musicBrainId] }
+                               rootXpath:@"./track"
+                        returnDictionary:YES
+                           mappingObject:mappingObject
+                          successHandler:successHandler
+                          failureHandler:failureHandler];
 }
 
 - (NSURLSessionDataTask *)loveTrack:(NSString *)title artist:(NSString *)artist successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
@@ -766,7 +771,7 @@ static LastFm *_sharedInstance = nil;
         @"name": @[ @"./supplierName", @"NSString" ],
         @"icon": @[ @"./supplierIcon", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"track.getBuylinks"
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist], @"country": [self forceString:country] }
                                rootXpath:@"./affiliations/downloads/affiliation"
@@ -784,7 +789,7 @@ static LastFm *_sharedInstance = nil;
         @"duration": @[ @"./duration", @"NSNumber" ],
         @"url": @[ @"./url", @"NSURL" ],
     };
-
+    
     return [self performApiCallForMethod:@"track.getsimilar"
                               withParams:@{ @"track": [self forceString:title], @"artist": [self forceString:artist] }
                                rootXpath:@"./similartracks/track"
@@ -802,13 +807,13 @@ static LastFm *_sharedInstance = nil;
         @"name": @[ @"./name", @"NSString" ],
         @"url": @[ @"./url", @"NSURL" ],
     };
-
+    
     NSDictionary *params = @{
         @"username": [self forceString:username],
         @"password": [self forceString:password],
         @"email": [self forceString:email],
     };
-
+    
     return [self performApiCallForMethod:@"user.signUp"
                               withParams:params
                                rootXpath:@"./user"
@@ -822,18 +827,18 @@ static LastFm *_sharedInstance = nil;
     username = [self forceString:username];
     password = [self forceString:password];
     NSString *authToken = [self md5sumFromString:[NSString stringWithFormat:@"%@%@", [username lowercaseString], [self md5sumFromString:password]]];
-
+    
     NSDictionary *mappingObject = @{
         @"name": @[ @"./name", @"NSString" ],
         @"key": @[ @"./key", @"NSString" ],
         @"subscriber": @[ @"./subscriber", @"NSNumber" ]
     };
-
+    
     return [self performApiCallForMethod:@"auth.getMobileSession"
                               withParams:@{ @"username": [username lowercaseString], @"authToken": authToken }
                                rootXpath:@"./session"
                         returnDictionary:YES
-                            mappingObject:mappingObject
+                           mappingObject:mappingObject
                           successHandler:successHandler
                           failureHandler:failureHandler];
 }
@@ -849,7 +854,7 @@ static LastFm *_sharedInstance = nil;
         @"trial_playsleft": @[ @"./radioPermission/user[@type=\"you\"]/trial/playsleft", @"NSNumber" ],
         @"trial_playselapsed": @[ @"./radioPermission/user[@type=\"you\"]/trial/playselapsed", @"NSNumber" ]
     };
-
+    
     return [self performApiCallForMethod:@"auth.getSessionInfo"
                               withParams:@{}
                                rootXpath:@"./application"
@@ -866,7 +871,7 @@ static LastFm *_sharedInstance = nil;
         @"album": [self forceString:album],
         @"duration": @((int)duration)
     };
-
+    
     return [self performApiCallForMethod:@"track.updateNowPlaying"
                               withParams:params
                                rootXpath:@"."
@@ -884,9 +889,9 @@ static LastFm *_sharedInstance = nil;
         @"duration": @((int)duration),
         @"timestamp": @((int)timestamp)
     };
-
+    
     return [self performApiCallForMethod:@"track.scrobble"
-                                
+            
                               withParams:params
                                rootXpath:@"."
                         returnDictionary:YES
@@ -903,12 +908,12 @@ static LastFm *_sharedInstance = nil;
         @"releasedate": @[ @"@releasedate", @"NSString" ], // deprecated
         @"date": @[ @"@releasedate", @"NSDate" ],
     };
-
+    
     NSDictionary *params = @{
         @"user": [self forceString:self.username],
         @"userec": @(basedOnRecommendations)
     };
-
+    
     return [self performApiCallForMethod:@"user.getNewReleases"
                               withParams:params
                                rootXpath:@"./albums/album"
@@ -925,7 +930,7 @@ static LastFm *_sharedInstance = nil;
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
         @"context": @[ @"./context/artist/name", @"NSArray" ],
     };
-
+    
     return [self performApiCallForMethod:@"user.getRecommendedAlbums"
                               withParams:@{ @"limit": @(limit) }
                                rootXpath:@"./recommendations/album"
@@ -954,12 +959,12 @@ static LastFm *_sharedInstance = nil;
         @"url": @[ @"./url", @"NSURL" ],
         @"registered": @[ @"./registered", @"NSDate" ],
     };
-
+    
     NSDictionary *params = @{};
     if (username) {
         params = @{ @"user": [self forceString:username] };
     }
-
+    
     return [self performApiCallForMethod:@"user.getInfo"
                               withParams:params
                                rootXpath:@"./user"
@@ -976,13 +981,13 @@ static LastFm *_sharedInstance = nil;
         @"playcount": @[ @"./playcount", @"NSNumber" ],
         @"url": @[ @"url", @"NSURL" ],
     };
-
+    
     NSDictionary *params = @{
         @"user": username ? [self forceString:username] : [self forceString:self.username],
         @"period": [self period:period],
         @"limit": @(limit),
     };
-
+    
     return [self performApiCallForMethod:@"user.getTopArtists"
                               withParams:params
                                rootXpath:@"./topartists/artist"
@@ -1001,12 +1006,12 @@ static LastFm *_sharedInstance = nil;
         @"url": @[ @"./url", @"NSURL" ],
         @"date": @[ @"./date", @"NSDate" ],
     };
-
+    
     NSDictionary *params = @{
         @"user": username ? [self forceString:username] : [self forceString:self.username],
         @"limit": @(limit),
     };
-
+    
     return [self performApiCallForMethod:@"user.getRecentTracks"
                               withParams:params
                                rootXpath:@"./recenttracks/track"
@@ -1024,12 +1029,12 @@ static LastFm *_sharedInstance = nil;
         @"url": @[ @"./url", @"NSURL" ],
         @"date": @[ @"./date", @"NSDate" ],
     };
-
+    
     NSDictionary *params = @{
         @"user": username ? [self forceString:username] : [self forceString:self.username],
         @"limit": @(limit),
     };
-
+    
     return [self performApiCallForMethod:@"user.getLovedTracks"
                               withParams:params
                                rootXpath:@"./lovedtracks/track"
@@ -1046,13 +1051,13 @@ static LastFm *_sharedInstance = nil;
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
         @"url": @[ @"./url", @"NSURL" ],
     };
-
+    
     NSDictionary *params = @{
         @"user": username ? [self forceString:username] : [self forceString:self.username],
         @"period": [self period:period],
         @"limit": @(limit),
     };
-
+    
     return [self performApiCallForMethod:@"user.getTopTracks"
                               withParams:params
                                rootXpath:@"./toptracks/track"
@@ -1077,13 +1082,13 @@ static LastFm *_sharedInstance = nil;
         @"country": @[ @"./venue/location/country", @"NSString" ],
         @"venue_url": @[ @"./venue/website", @"NSURL" ]
     };
-
+    
     NSDictionary *params = @{
         @"user": username ? [self forceString:username] : [self forceString:self.username],
         @"festivalsonly": @(festivalsonly),
         @"limit": @(limit),
     };
-
+    
     return [self performApiCallForMethod:@"user.getEvents"
                               withParams:params
                                rootXpath:@"./events/event"
@@ -1101,13 +1106,13 @@ static LastFm *_sharedInstance = nil;
         @"playcount": @[ @"./playcount", @"NSNumber" ],
         @"url": @[ @"url", @"NSURL" ],
     };
-
+    
     NSDictionary *params = @{
         @"user": username ? [self forceString:username] : [self forceString:self.username],
         @"period": [self period:period],
         @"limit": @(limit),
     };
-
+    
     return [self performApiCallForMethod:@"user.getTopAlbums"
                               withParams:params
                                rootXpath:@"./topalbums/album"
@@ -1127,7 +1132,7 @@ static LastFm *_sharedInstance = nil;
         @"image": @[ @"./image[@size=\"large\"]", @"NSURL" ],
         @"artist": @[ @"./artist/name", @"NSString" ]
     };
-
+    
     return [self performApiCallForMethod:@"chart.getTopTracks"
                               withParams:@{ @"limit": @(limit), @"page": @(page) }
                                rootXpath:@"./tracks/track"
@@ -1144,7 +1149,7 @@ static LastFm *_sharedInstance = nil;
         @"artist": @[ @"./artist/name", @"NSString" ],
         @"percentagechange": @[ @"./percentagechange", @"NSNumber" ]
     };
-
+    
     return [self performApiCallForMethod:@"chart.getHypedTracks"
                               withParams:@{ @"limit": @(limit), @"page": @(page) }
                                rootXpath:@"./tracks/track"
@@ -1166,7 +1171,7 @@ static LastFm *_sharedInstance = nil;
         @"longitude": @[ @"./venue/location/*/*[local-name()='long']", @"NSNumber" ],
         @"url": @[ @"url", @"NSURL" ]
     };
-
+    
     return [self performApiCallForMethod:@"geo.getEvents"
                               withParams:@{ @"location": [self forceString:location] }
                                rootXpath:@"./events/event"
@@ -1220,10 +1225,10 @@ static BOOL DDErrorOrUnderlyingErrorHasCodeInDomain(NSError *error, NSInteger co
         }
     }
     
-//#ifndef __OPTIMIZE__
-//    NSString *respStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-//    NSLog(@"lastfm response: %@",respStr);
-//#endif
+    //#ifndef __OPTIMIZE__
+    //    NSString *respStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    //    NSLog(@"lastfm response: %@",respStr);
+    //#endif
     
     NSError *docError = nil;
     DDXMLDocument *document = [[DDXMLDocument alloc] initWithData:data options:0 error:&docError];
