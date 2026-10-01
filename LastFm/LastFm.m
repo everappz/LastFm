@@ -900,17 +900,41 @@ static LastFm *_sharedInstance = nil;
                           failureHandler:failureHandler];
 }
 
-- (NSURLSessionDataTask *)sendScrobbledTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album withDuration:(NSTimeInterval)duration atTimestamp:(NSTimeInterval)timestamp successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
-    NSDictionary *params = @{
-        @"track": [self forceString:track],
-        @"artist": [self forceString:artist],
-        @"album": [self forceString:album],
-        @"duration": @((int)duration),
-        @"timestamp": @((int)timestamp)
-    };
-    
+- (NSURLSessionDataTask *)sendScrobbledTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album albumArtist:(NSString *)albumArtist trackNumber:(NSInteger)trackNumber context:(NSString *)context streamId:(NSString *)streamId chosenByUser:(NSNumber *)chosenByUser mbid:(NSString *)mbid withDuration:(NSTimeInterval)duration atTimestamp:(NSTimeInterval)timestamp successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+    NSMutableDictionary *params = [NSMutableDictionary dictionary];
+
+    // Required parameters.
+    params[@"track"] = [self forceString:track];
+    params[@"artist"] = [self forceString:artist];
+    params[@"timestamp"] = @((long)timestamp);
+
+    // Optional parameters: only included in the request when they have a value.
+    if (album.length > 0) {
+        params[@"album"] = album;
+    }
+    if (albumArtist.length > 0) {
+        params[@"albumArtist"] = albumArtist;
+    }
+    if (trackNumber > 0) {
+        params[@"trackNumber"] = @(trackNumber);
+    }
+    if (context.length > 0) {
+        params[@"context"] = context;
+    }
+    if (streamId.length > 0) {
+        params[@"streamId"] = streamId;
+    }
+    if (chosenByUser != nil) {
+        params[@"chosenByUser"] = chosenByUser.boolValue ? @1 : @0;
+    }
+    if (mbid.length > 0) {
+        params[@"mbid"] = mbid;
+    }
+    if (duration > 0) {
+        params[@"duration"] = @(lround(duration));
+    }
+
     return [self performApiCallForMethod:@"track.scrobble"
-            
                               withParams:params
                                rootXpath:@"."
                         returnDictionary:YES
