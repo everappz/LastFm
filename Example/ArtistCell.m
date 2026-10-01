@@ -11,7 +11,7 @@
 #import "UIImageView+WebCache.h"
 
 @interface ArtistCell ()
-@property (strong, nonatomic) NSOperation *operation;
+@property (strong, nonatomic) NSURLSessionDataTask *operation;
 @end
 
 @implementation ArtistCell
@@ -20,7 +20,7 @@
     self.textLabel.text = artist;
     self.detailTextLabel.text = @"loading...";
 
-    self.operation = [[LastFm sharedInstance] getInfoForArtist:artist successHandler:^(NSDictionary *result) {
+    self.operation = [[LastFm sharedInstance] getInfoForArtist:artist autocorrect:YES successHandler:^(NSDictionary *result) {
         // This check is necessary because the successHandler might be called when the cell is
         // already being reused for another artist!
         if ([artist isEqualToString:[[result objectForKey:@"_params"] objectForKey:@"artist"]]) {

@@ -864,14 +864,33 @@ static LastFm *_sharedInstance = nil;
                           failureHandler:failureHandler];
 }
 
-- (NSURLSessionDataTask *)sendNowPlayingTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album withDuration:(NSTimeInterval)duration successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
-    NSDictionary *params = @{
-        @"track": [self forceString:track],
-        @"artist": [self forceString:artist],
-        @"album": [self forceString:album],
-        @"duration": @((int)duration)
-    };
-    
+- (NSURLSessionDataTask *)sendNowPlayingTrack:(NSString *)track byArtist:(NSString *)artist onAlbum:(NSString *)album albumArtist:(NSString *)albumArtist trackNumber:(NSInteger)trackNumber context:(NSString *)context mbid:(NSString *)mbid withDuration:(NSTimeInterval)duration successHandler:(LastFmReturnBlockWithDictionary)successHandler failureHandler:(LastFmReturnBlockWithError)failureHandler {
+    NSMutableDictionary *params = [NSMutableDictionary dictionary];
+
+    // Required parameters.
+    params[@"track"] = [self forceString:track];
+    params[@"artist"] = [self forceString:artist];
+
+    // Optional parameters: only included in the request when they have a value.
+    if (album.length > 0) {
+        params[@"album"] = album;
+    }
+    if (albumArtist.length > 0) {
+        params[@"albumArtist"] = albumArtist;
+    }
+    if (trackNumber > 0) {
+        params[@"trackNumber"] = @(trackNumber);
+    }
+    if (context.length > 0) {
+        params[@"context"] = context;
+    }
+    if (mbid.length > 0) {
+        params[@"mbid"] = mbid;
+    }
+    if (duration > 0) {
+        params[@"duration"] = @(lround(duration));
+    }
+
     return [self performApiCallForMethod:@"track.updateNowPlaying"
                               withParams:params
                                rootXpath:@"."

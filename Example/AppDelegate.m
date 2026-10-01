@@ -9,24 +9,16 @@
 #import <LastFm/LastFm.h>
 #import "AppDelegate.h"
 #import "ViewController.h"
-#import "LastFmCache.h"
-
-@interface AppDelegate ()
-@property (strong, nonatomic) LastFmCache *lastFmCache;
-@end
 
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    self.lastFmCache = [[LastFmCache alloc] init];
-
     // Setup the Last.fm SDK
     // IMPORTANT: please register your own API key at http://www.last.fm/api - do NOT use this key!
     [LastFm sharedInstance].apiKey = @"349b1b1344545e7c7832d0c2a91f44fe";
     [LastFm sharedInstance].apiSecret = @"d2a6f3aa73d473d989118e9430a36608";
     [LastFm sharedInstance].session = [[NSUserDefaults standardUserDefaults] stringForKey:SESSION_KEY];
     [LastFm sharedInstance].username = [[NSUserDefaults standardUserDefaults] stringForKey:USERNAME_KEY];
-    [LastFm sharedInstance].cacheDelegate = self.lastFmCache;
 
     return YES;
 }

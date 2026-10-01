@@ -27,7 +27,7 @@
     self.scrobblesLabel.text = @"";
     self.personalScrobblesLabel.text = @"";
 
-    [[LastFm sharedInstance] getInfoForArtist:self.artist successHandler:^(NSDictionary *result) {
+    [[LastFm sharedInstance] getInfoForArtist:self.artist autocorrect:YES successHandler:^(NSDictionary *result) {
         [self.webView loadHTMLString:[result objectForKey:@"bio"] baseURL:nil];
         self.artistLabel.text = [result objectForKey:@"name"];
         self.scrobblesLabel.text = [NSString stringWithFormat:@"%@ global scrobbles", [result objectForKey:@"playcount"]];

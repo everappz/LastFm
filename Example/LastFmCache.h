@@ -9,6 +9,6 @@
 #import <LastFm/LastFm.h>
 #import <Foundation/Foundation.h>
 
-@interface LastFmCache : NSObject <LastFmCache>
+@interface LastFmCache : NSObject
 
 @end
